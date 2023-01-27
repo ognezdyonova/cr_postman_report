@@ -1,0 +1,2 @@
+level: log, messages: send data to TR
+level: log, messages: [object Object]
