@@ -1,0 +1,191 @@
+var pId = pm.variables.get("projId");
+
+postman.setGlobalVariable("loadUtils", function loadUtils() {
+    let utils = {};
+    
+    utils.getSectionId = function getSectionId(sectionName) {
+    let sectionCurrent;
+      pm.sendRequest({url: "https://centralreach.testrail.io/index.php?/api/v2/get_sections/"+pId+"&suite_id="+pm.variables.get("suitId"),
+            method: 'GET',
+            header: {
+                "Content-Type": "application/json",
+                "Authorization": "Basic " + pm.variables.get("testrailAuth")
+            }
+    
+        }, function (err, res) {
+            
+            // /typeof image_array !== 'undefined' && image_array.length > 0
+            //console.log(res.text());
+            // let resBody = new Buffer.from(res.stream).toString()
+            // console.info(JSON.parse(resBody));            
+            
+            let section = res.json().sections.filter(function(suite){
+                        return suite.name.includes(sectionName); });
+                        
+            if(res.json().length!=0 && section.length!=0){
+                    section.forEach(function(s){
+                        if(s.name === sectionName){
+                            postman.setGlobalVariable("sectionId",s.id);
+                        }
+                    })
+                    
+            }else{
+                 pm.sendRequest({url: "https://centralreach.testrail.io/index.php?/api/v2/add_section/"+pm.variables.get("projId"),
+                    method: 'POST',
+                    header: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Basic " + pm.variables.get("testrailAuth")
+                    },
+                        body: {
+                            mode: 'raw',
+                            raw: JSON.stringify({
+                                "name": sectionName,
+                                "description": "",
+                                "suite_id":pm.variables.get("suitId"),
+                            })
+                        },
+                    }, function (err, resNewSection) {
+                        postman.setGlobalVariable("sectionId",resNewSection.json().id);
+                    });
+            }
+
+        });
+    
+    };
+
+    utils.getCases = function getCases(sectionId, r,status,error){
+    pm.sendRequest({
+            async: false,
+            url: "https://centralreach.testrail.io/index.php?/api/v2/get_cases/"+pm.variables.get("projId")+
+            "&suite_id="+pm.variables.get("suitId") +"&section_id="+pm.globals.get("sectionId"),
+            method: 'GET',
+            header: {
+                "Content-Type": "application/json",
+                "Authorization": "Basic " + pm.variables.get("testrailAuth")
+            },
+        }, function (err, res) {
+            var caseN = res.json().cases.filter(function(caseNQ){
+                return caseNQ.title.includes(r.name); });
+                
+            if(res.json().length!=0 && caseN.length!=0){
+                    caseN.forEach(function(s){
+                        if(s.title === r.name){
+                            // console.log(s.id)  newCaseId
+                            // pm.environment.set("newCaseId",s.id);
+                            postman.setGlobalVariable("$caseId",s.id);
+                            
+                            
+                         pm.sendRequest({url: "https://centralreach.testrail.io/index.php?/api/v2/add_results_for_cases/"+pm.globals.get("$runId"),
+                            method: 'POST',
+                            header: {
+                                "Content-Type": "application/json",
+                                "Authorization": "Basic " + pm.variables.get("testrailAuth")
+                            },
+                                body: {
+                                    mode: 'raw',
+                                    raw: JSON.stringify({
+                                    "results": [{
+                                        "case_id": String(s.id),
+                                        "status_id": status,
+                                        "custom_customresultfield_rcversion_dropdown": pm.variables.get("currentRC"),
+                                        "comment":"Type:"+r.method+"\n"
+                                            +"Url:"+r.url+"\n"+
+                                            "Headers:\n"+JSON.stringify(r.headers,null,5)+"\n"+
+                                            "Data:\n"+JSON.stringify(r.data,null,5)+"\n"+error,
+                                    }]
+                                        
+                                    })
+                                },
+                            }, function (err, resNewSection) {
+                                if(!err){
+                                  console.log("Status sended for case: "+s.id); 
+                                }else{
+                                    console.log("Status does not send for case: "+s.id);
+                                }
+                                
+                            });
+                            
+                            
+                            
+                        }
+                    })
+            }else{
+                  pm.sendRequest({url: "https://centralreach.testrail.io/index.php?/api/v2/add_case/"+sectionId,
+                        method: 'POST',
+                        header: {
+                            "Content-Type": "application/json",
+                            "Authorization": "Basic " + pm.variables.get("testrailAuth")
+                        },
+                            body: {
+                                mode: 'raw',
+                                raw: JSON.stringify({
+                                    "title": r.name,
+                                    "custom_customfield_testcategory":["3"],
+                                    "custom_customfield_testcaseversion":1,
+                                    "custom_customfield_automationstatus":1
+                                })
+                            },
+                        }, function (err, resNewCase) {
+                            postman.setGlobalVariable("$caseId",resNewCase.json().id);
+                            
+                             pm.sendRequest({url: "https://centralreach.testrail.io/index.php?/api/v2/add_results_for_cases/"+pm.globals.get("$runId"),
+                            method: 'POST',
+                            header: {
+                                "Content-Type": "application/json",
+                                "Authorization": "Basic " + pm.variables.get("testrailAuth")
+                            },
+                                body: {
+                                    mode: 'raw',
+                                    raw: JSON.stringify({
+                                    "results": [{
+                                        "case_id": String(resNewCase.json().id),
+                                        "status_id": status,
+                                        "custom_customresultfield_rcversion_dropdown": pm.variables.get("currentRC"),
+                                        "comment":"Type:"+r.method+"\n"
+                                            +"Url:"+r.url+"\n"+
+                                            "Headers:\n"+JSON.stringify(r.headers,null,5)+"\n"+
+                                            "Data:\n"+JSON.stringify(r.data,null,5)+"\n"+error,
+                                    }]
+                                        
+                                    })
+                                },
+                            }, function (err, resNewSection) {
+                                if(!err){
+                                  console.log("Status sended for case: "+resNewCase.json().id); 
+                                }else{
+                                    console.log("Status does not send for case: "+resNewCase.json().id);
+                                }
+                                
+                            });
+                            
+                        });
+            }
+        });
+        
+    };
+    
+    utils.getRuns = function getRuns(runName){
+        
+         pm.globals.set("$runId", pm.variables.get("runId"));
+    
+    };
+   
+    utils.randomString = function randomString(start,count){
+        let text = "";
+        let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+          for (let i = 0; i < count; i++){
+            text += possible.charAt(Math.floor(Math.random() * possible.length));
+          }
+          return start+text;
+        };
+        
+      utils.randomInt = function randomInt(min,max){
+            var rand = min - 0.5 + Math.random() * (max - min + 1)
+            rand = Math.round(rand);
+             return rand;
+        };
+
+    return utils;
+
+} + ';loadUtils(); ');

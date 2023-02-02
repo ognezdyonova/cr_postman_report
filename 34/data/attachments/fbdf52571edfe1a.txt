@@ -1,0 +1,3 @@
+level: log, messages: error
+level: log, messages: error
+level: log, messages: error
